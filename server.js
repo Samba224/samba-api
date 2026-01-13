@@ -34,18 +34,43 @@ async function fetchRSS(url, siteName) {
     const data = parser.parse(response.data);
     const items = data.rss?.channel?.item || data.feed?.entry || [];
 
-    const articles = (Array.isArray(items) ? items : [items]).slice(0, 10).map((item, i) => ({
-      id: `${siteName}_${Date.now()}_${i}`,
-      title: item.title || 'Sans titre',
-      excerpt: (item.description || item.summary || '').replace(/<[^>]*>/g, '').substring(0, 200),
-      link: item.link?.['#text'] || item.link || item.id || '#',
-      image: extractImage(item),
-      source: siteName,
-      category: categorize(item.title || ''),
-      timestamp: item.pubDate || item.published || new Date().toISOString(),
-      // Ajouter le contenu complet si disponible
-      content: (item['content:encoded'] || item.description || item.summary || '').replace(/<[^>]*>/g, '').substring(0, 1000)
-    }));
+    const articles = (Array.isArray(items) ? items : [items]).slice(0, 10).map((item, i) => {
+      // Extraction du contenu complet
+      const rawContent = item['content:encoded'] || item.content || item.description || item.summary || '';
+      const cleanContent = rawContent
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Enlever scripts
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '') // Enlever styles
+        .replace(/<[^>]+>/g, '') // Enlever HTML
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#8217;/g, "'")
+        .replace(/&#8211;/g, '-')
+        .replace(/\s+/g, ' ') // Normaliser espaces
+        .trim();
+      
+      // Extraction de l'excerpt (résumé court)
+      const excerpt = cleanContent.substring(0, 250) + (cleanContent.length > 250 ? '...' : '');
+      
+      // Extraction du contenu complet (limité à 3000 caractères)
+      const fullContent = cleanContent.substring(0, 3000);
+      
+      return {
+        id: `${siteName}_${Date.now()}_${i}`,
+        title: (item.title || 'Sans titre').trim(),
+        excerpt: excerpt,
+        summary: excerpt, // Alias pour compatibilité
+        content: fullContent,
+        link: item.link?.['#text'] || item.link || item.id || '#',
+        image: extractImage(item),
+        source: siteName,
+        category: categorize(item.title || ''),
+        timestamp: item.pubDate || item.published || item.updated || new Date().toISOString(),
+        author: item.creator || item.author?.name || item.author || 'Rédaction'
+      };
+    });
 
     console.log(`✅ ${articles.length} articles RSS de ${siteName}`);
     return articles;
@@ -57,15 +82,37 @@ async function fetchRSS(url, siteName) {
 }
 
 function extractImage(item) {
-  // Chercher image dans différents formats RSS
+  // 1. Media RSS namespace
   if (item['media:content']?.['@_url']) return item['media:content']['@_url'];
-  if (item.enclosure?.['@_url']) return item.enclosure['@_url'];
-  if (item.image) return item.image;
+  if (item['media:thumbnail']?.['@_url']) return item['media:thumbnail']['@_url'];
   
-  // Extraire depuis description HTML
-  const desc = item.description || item.summary || '';
-  const imgMatch = desc.match(/<img[^>]+src="([^">]+)"/);
-  return imgMatch ? imgMatch[1] : null;
+  // 2. Enclosure (podcasts/attachments)
+  if (item.enclosure?.['@_url']) {
+    const url = item.enclosure['@_url'];
+    if (url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return url;
+  }
+  
+  // 3. Direct image field
+  if (item.image?.url) return item.image.url;
+  if (typeof item.image === 'string') return item.image;
+  
+  // 4. Extract from HTML content
+  const htmlContent = item['content:encoded'] || item.description || item.summary || '';
+  
+  // Chercher balise img
+  const imgMatch = htmlContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (imgMatch && imgMatch[1]) {
+    let imgUrl = imgMatch[1];
+    // Nettoyer l'URL
+    imgUrl = imgUrl.replace(/&amp;/g, '&');
+    return imgUrl;
+  }
+  
+  // 5. Chercher URL d'image dans le texte
+  const urlMatch = htmlContent.match(/(https?:\/\/[^\s<>"]+?\.(?:jpg|jpeg|png|gif|webp))/i);
+  if (urlMatch) return urlMatch[1];
+  
+  return null;
 }
 
 function categorize(title) {
