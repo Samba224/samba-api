@@ -5,7 +5,7 @@
 // 🔧 CONFIGURATION
 // Remplacer par votre URL Ngrok si vous exposez l'API
 // Ou garder localhost si vous testez sur émulateur
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://samba-api-production.up.railway.app';
 
 // Pour émulateur Android : 'http://10.0.2.2:3000'
 // Pour Ngrok : 'https://votre-url.ngrok.io'

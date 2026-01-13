@@ -1,305 +1,171 @@
 const express = require('express');
 const axios = require('axios');
-const cheerio = require('cheerio');
+const { XMLParser } = require('fast-xml-parser');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+const parser = new XMLParser();
+
 // ═══════════════════════════════════════════════════════════
-// 🔥 VERSION BRUTALE - GÉNÈRE DES ARTICLES RÉELS DYNAMIQUES
+// 📡 SCRAPING VIA RSS FEEDS (Plus fiable)
 // ═══════════════════════════════════════════════════════════
 
-// Base de données d'articles réels guinéens (mise à jour manuelle ou automatique)
-const REAL_ARTICLES_DATABASE = {
-  guineematin: [
-    {
-      title: "Simandou : Le méga-projet ferroviaire entre en phase active",
-      excerpt: "Le projet minier de Simandou franchit une étape décisive avec le démarrage des travaux du chemin de fer de 650 km reliant les mines au port. Impact économique majeur attendu.",
-      category: "ÉCONOMIE",
-      url: "https://guineematin.com/simandou-projet-ferroviaire"
-    },
-    {
-      title: "Conakry : Lancement d'un hub technologique pour startups",
-      excerpt: "Le gouvernement inaugure un centre d'innovation dédié aux jeunes entrepreneurs du secteur tech. Objectif : faire de la Guinée un pôle technologique régional.",
-      category: "TECHNOLOGIE",
-      url: "https://guineematin.com/hub-tech-conakry"
-    },
-    {
-      title: "Transition politique : Les élections fixées pour 2025",
-      excerpt: "La CEDEAO et le gouvernement de transition s'accordent sur un calendrier électoral. Les enjeux démocratiques au cœur des débats nationaux.",
-      category: "POLITIQUE",
-      url: "https://guineematin.com/elections-2025"
-    },
-    {
-      title: "Barrages hydroélectriques : La Guinée vise l'autosuffisance",
-      excerpt: "Kaléta et Souapiti produisent désormais 70% de l'électricité nationale. L'électrification rurale s'accélère dans tout le pays.",
-      category: "ÉNERGIE",
-      url: "https://guineematin.com/barrages-electricite"
-    },
-    {
-      title: "Agriculture : Innovations pour nourrir la Guinée",
-      excerpt: "Les nouvelles technologies agricoles (drones, fintech) révolutionnent le secteur. 60% de la population dépend encore de l'agriculture.",
-      category: "AGRICULTURE",
-      url: "https://guineematin.com/agriculture-innovation"
-    }
-  ],
-  aminata: [
-    {
-      title: "Culture guinéenne : Le festival de Conakry bat son plein",
-      excerpt: "Plus de 50 000 visiteurs attendus pour célébrer la richesse culturelle guinéenne. Musique, danse et artisanat à l'honneur.",
-      category: "CULTURE",
-      url: "https://aminata.com/festival-conakry"
-    },
-    {
-      title: "Éducation : Nouveaux programmes scolaires en préparation",
-      excerpt: "Le ministère de l'Éducation annonce une réforme majeure pour adapter l'enseignement aux défis du 21e siècle.",
-      category: "ÉDUCATION",
-      url: "https://aminata.com/reforme-education"
-    },
-    {
-      title: "Santé : Campagne de vaccination nationale lancée",
-      excerpt: "Le gouvernement mobilise 500 centres de santé pour une vaste campagne de prévention. Objectif : couvrir 80% de la population.",
-      category: "SANTÉ",
-      url: "https://aminata.com/campagne-vaccination"
-    },
-    {
-      title: "Entrepreneuriat féminin : 1000 femmes formées au digital",
-      excerpt: "Un programme de formation aux métiers du numérique cible les femmes entrepreneures. Le taux de participation dépasse les attentes.",
-      category: "SOCIÉTÉ",
-      url: "https://aminata.com/femmes-digital"
-    },
-    {
-      title: "Transport : Modernisation du réseau routier en cours",
-      excerpt: "Plus de 200 km de routes seront réhabilitées cette année pour faciliter le commerce intérieur et réduire l'enclavement.",
-      category: "INFRASTRUCTURE",
-      url: "https://aminata.com/routes-modernisation"
-    }
-  ],
-  guineenews: [
-    {
-      title: "Mines de Boké : Nouvelles normes environnementales",
-      excerpt: "Les compagnies minières devront respecter des standards plus stricts pour protéger les communautés locales et l'environnement.",
-      category: "ENVIRONNEMENT",
-      url: "https://guineenews.org/mines-environnement"
-    },
-    {
-      title: "Diaspora : Les Guinéens de l'étranger investissent au pays",
-      excerpt: "La diaspora guinéenne mobilise des millions de dollars pour des projets immobiliers et entrepreneuriaux en Guinée.",
-      category: "ÉCONOMIE",
-      url: "https://guineenews.org/diaspora-investissements"
-    },
-    {
-      title: "Sport : Le Syli National se prépare pour la CAN",
-      excerpt: "L'équipe nationale de football intensifie ses entraînements en vue de la prochaine Coupe d'Afrique des Nations.",
-      category: "SPORT",
-      url: "https://guineenews.org/syli-national-can"
-    },
-    {
-      title: "Télécommunications : La 5G arrive en Guinée",
-      excerpt: "Les opérateurs téléphoniques annoncent le déploiement progressif de la 5G dans les grandes villes guinéennes dès cette année.",
-      category: "TECHNOLOGIE",
-      url: "https://guineenews.org/5g-guinee"
-    },
-    {
-      title: "Tourisme : La Guinée mise sur son potentiel naturel",
-      excerpt: "Cascades, montagnes et plages : le gouvernement lance une campagne pour promouvoir le tourisme écologique.",
-      category: "TOURISME",
-      url: "https://guineenews.org/tourisme-ecologique"
-    }
-  ],
-  africaguinee: [
-    {
-      title: "CEDEAO : La Guinée réintègre les instances régionales",
-      excerpt: "Après la transition, la Guinée retrouve sa place au sein des organes de décision de la Communauté Économique des États de l'Afrique de l'Ouest.",
-      category: "INTERNATIONAL",
-      url: "https://africaguinee.com/cedeao-reintegration"
-    },
-    {
-      title: "Justice : Réforme du système judiciaire engagée",
-      excerpt: "Le gouvernement annonce des mesures pour renforcer l'indépendance de la justice et lutter contre la corruption.",
-      category: "POLITIQUE",
-      url: "https://africaguinee.com/reforme-justice"
-    },
-    {
-      title: "Énergie solaire : Des panneaux pour 10 000 foyers",
-      excerpt: "Un partenariat public-privé permettra d'équiper des milliers de ménages ruraux en énergie solaire d'ici fin 2025.",
-      category: "ÉNERGIE",
-      url: "https://africaguinee.com/energie-solaire"
-    },
-    {
-      title: "Pêche : Protection des ressources maritimes guinéennes",
-      excerpt: "De nouvelles régulations visent à préserver les stocks de poissons et à lutter contre la pêche illégale dans les eaux territoriales.",
-      category: "ENVIRONNEMENT",
-      url: "https://africaguinee.com/peche-protection"
-    },
-    {
-      title: "Coopération : La Guinée signe des accords avec la Chine",
-      excerpt: "Infrastructures, éducation et santé au cœur des nouveaux partenariats économiques entre Conakry et Pékin.",
-      category: "INTERNATIONAL",
-      url: "https://africaguinee.com/cooperation-chine"
-    }
-  ]
+const RSS_FEEDS = {
+  'guineematin': 'https://guineematin.com/feed',
+  'aminata': 'https://aminata.com/feed',
+  'guineenews': 'https://guineenews.org/feed',
+  'africaguinee': 'https://africaguinee.com/feed'
 };
 
-// Images dynamiques par catégorie
-const CATEGORY_IMAGES = {
-  'ÉCONOMIE': 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=800',
-  'POLITIQUE': 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=800',
-  'TECHNOLOGIE': 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800',
-  'ÉNERGIE': 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=800',
-  'AGRICULTURE': 'https://images.unsplash.com/photo-1625246333195-78d9c38ad649?w=800',
-  'CULTURE': 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=800',
-  'ÉDUCATION': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800',
-  'SANTÉ': 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800',
-  'SOCIÉTÉ': 'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=800',
-  'INFRASTRUCTURE': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800',
-  'ENVIRONNEMENT': 'https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=800',
-  'SPORT': 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800',
-  'TOURISME': 'https://images.unsplash.com/photo-1500835556837-99ac94a94552?w=800',
-  'INTERNATIONAL': 'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800',
-  'ACTUALITÉ': 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
-};
+async function fetchRSS(url, siteName) {
+  try {
+    console.log(`📡 Fetching RSS: ${siteName}...`);
+    
+    const response = await axios.get(url, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; SambaIA/1.0)'
+      }
+    });
 
-// ═══════════════════════════════════════════════════════════
-// GÉNÉRATEUR D'ARTICLES DYNAMIQUES
-// ═══════════════════════════════════════════════════════════
+    const data = parser.parse(response.data);
+    const items = data.rss?.channel?.item || data.feed?.entry || [];
 
-function getArticlesForSite(siteName) {
-  const baseArticles = REAL_ARTICLES_DATABASE[siteName] || [];
-  
-  // Randomiser l'ordre et ajouter timestamp
-  return baseArticles
-    .sort(() => Math.random() - 0.5)
-    .map((article, index) => ({
-      id: `${siteName}_${Date.now()}_${index}`,
-      title: article.title,
-      excerpt: article.excerpt,
-      link: article.url,
-      image: CATEGORY_IMAGES[article.category] || CATEGORY_IMAGES['ACTUALITÉ'],
-      category: article.category,
+    const articles = (Array.isArray(items) ? items : [items]).slice(0, 10).map((item, i) => ({
+      id: `${siteName}_${Date.now()}_${i}`,
+      title: item.title || 'Sans titre',
+      excerpt: (item.description || item.summary || '').replace(/<[^>]*>/g, '').substring(0, 200),
+      link: item.link?.['#text'] || item.link || item.id || '#',
+      image: extractImage(item),
       source: siteName,
-      timestamp: new Date(Date.now() - Math.random() * 86400000).toISOString(), // Aléatoire dans les dernières 24h
-      readTime: `${Math.floor(Math.random() * 5) + 2} min`
+      category: categorize(item.title || ''),
+      timestamp: item.pubDate || item.published || new Date().toISOString()
     }));
+
+    console.log(`✅ ${articles.length} articles RSS de ${siteName}`);
+    return articles;
+
+  } catch (error) {
+    console.error(`❌ Erreur RSS ${siteName}:`, error.message);
+    return [];
+  }
+}
+
+function extractImage(item) {
+  // Chercher image dans différents formats RSS
+  if (item['media:content']?.['@_url']) return item['media:content']['@_url'];
+  if (item.enclosure?.['@_url']) return item.enclosure['@_url'];
+  if (item.image) return item.image;
+  
+  // Extraire depuis description HTML
+  const desc = item.description || item.summary || '';
+  const imgMatch = desc.match(/<img[^>]+src="([^">]+)"/);
+  return imgMatch ? imgMatch[1] : null;
+}
+
+function categorize(title) {
+  const lower = title.toLowerCase();
+  if (lower.match(/économie|banque|mine|simandou/)) return 'ÉCONOMIE';
+  if (lower.match(/politique|président|élection/)) return 'POLITIQUE';
+  if (lower.match(/tech|numérique|innovation/)) return 'TECHNOLOGIE';
+  if (lower.match(/santé|éducation|culture|sport/)) return 'SOCIÉTÉ';
+  return 'ACTUALITÉ';
+}
+
+// Cache
+const cache = new Map();
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+async function getCached(key, fetchFn) {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.time < CACHE_DURATION) {
+    console.log(`📦 Cache: ${key}`);
+    return cached.data;
+  }
+  const data = await fetchFn();
+  cache.set(key, { data, time: Date.now() });
+  return data;
 }
 
 // ═══════════════════════════════════════════════════════════
-// ROUTES API
+// ROUTES
 // ═══════════════════════════════════════════════════════════
 
 app.get('/', (req, res) => {
   res.json({
-    message: '🦁 API Samba IA - News Guinéennes en Temps Réel',
-    version: '2.0.0 - BRUTAL MODE',
-    status: 'OPERATIONAL ✅',
+    message: '🦁 API Samba IA - RSS Scraping',
+    version: '4.0.0 - RSS',
     endpoints: {
-      'GET /api/news/:site': 'Articles d\'un site spécifique',
-      'GET /api/news/all': 'Tous les articles agrégés',
-      'GET /api/discover': 'Thèmes découverte pour l\'app',
-      'GET /api/refresh': 'Actualiser la base de données'
+      'GET /api/news/:site': 'Articles via RSS',
+      'GET /api/news/all': 'Tous les flux',
+      'GET /api/discover': 'Thèmes découverte'
     },
-    sites: Object.keys(REAL_ARTICLES_DATABASE),
-    total_articles: Object.values(REAL_ARTICLES_DATABASE).flat().length
+    sites: Object.keys(RSS_FEEDS)
   });
 });
 
-// Route : Un site spécifique
-app.get('/api/news/:site', (req, res) => {
+app.get('/api/news/:site', async (req, res) => {
   const { site } = req.params;
-  
-  if (!REAL_ARTICLES_DATABASE[site]) {
-    return res.status(404).json({
-      success: false,
-      error: `Site '${site}' non trouvé. Sites disponibles: ${Object.keys(REAL_ARTICLES_DATABASE).join(', ')}`
-    });
+  if (!RSS_FEEDS[site]) {
+    return res.status(404).json({ success: false, error: 'Site non trouvé' });
   }
 
-  const articles = getArticlesForSite(site);
-  
-  res.json({
-    success: true,
-    site,
-    count: articles.length,
-    articles,
-    lastUpdate: new Date().toISOString()
-  });
+  try {
+    const articles = await getCached(site, () => fetchRSS(RSS_FEEDS[site], site));
+    res.json({
+      success: true,
+      site,
+      count: articles.length,
+      articles,
+      lastUpdate: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-// Route : Tous les sites
-app.get('/api/news/all', (req, res) => {
-  const allArticles = Object.keys(REAL_ARTICLES_DATABASE)
-    .map(site => getArticlesForSite(site))
-    .flat()
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-  res.json({
-    success: true,
-    total: allArticles.length,
-    sources: Object.keys(REAL_ARTICLES_DATABASE),
-    articles: allArticles,
-    lastUpdate: new Date().toISOString()
-  });
+app.get('/api/news/all', async (req, res) => {
+  try {
+    const results = await Promise.all(
+      Object.entries(RSS_FEEDS).map(([name, url]) =>
+        getCached(name, () => fetchRSS(url, name))
+      )
+    );
+    const combined = results.flat();
+    res.json({
+      success: true,
+      total: combined.length,
+      articles: combined
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-// Route : Thèmes découverte
-app.get('/api/discover', (req, res) => {
-  const allArticles = Object.keys(REAL_ARTICLES_DATABASE)
-    .map(site => getArticlesForSite(site))
-    .flat();
-
-  // Prendre 6 articles aléatoires de différentes catégories
-  const categories = [...new Set(allArticles.map(a => a.category))];
-  const themes = categories.slice(0, 6).map((cat, i) => {
-    const article = allArticles.find(a => a.category === cat) || allArticles[i];
-    return {
+app.get('/api/discover', async (req, res) => {
+  try {
+    const articles = await getCached('guineematin', () =>
+      fetchRSS(RSS_FEEDS.guineematin, 'guineematin')
+    );
+    const themes = articles.slice(0, 6).map((a, i) => ({
       id: i + 1,
-      title: article.title,
-      summary: article.excerpt,
-      content: `${article.title}\n\n${article.excerpt}\n\nSource: ${article.source}\nCatégorie: ${article.category}`,
-      category: article.category,
-      image: article.image,
-      url: article.link
-    };
-  });
-
-  res.json({
-    success: true,
-    count: themes.length,
-    themes
-  });
+      title: a.title,
+      summary: a.excerpt,
+      category: a.category,
+      image: a.image || `https://source.unsplash.com/800x600/?africa,${i}`,
+      url: a.link
+    }));
+    res.json({ success: true, themes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-// Route : Refresh (simuler une mise à jour)
-app.get('/api/refresh', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Base de données actualisée',
-    timestamp: new Date().toISOString(),
-    total_articles: Object.values(REAL_ARTICLES_DATABASE).flat().length
-  });
-});
-
-// ═══════════════════════════════════════════════════════════
-// DÉMARRAGE
-// ═══════════════════════════════════════════════════════════
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n' + '═'.repeat(70));
-  console.log('🦁 API SAMBA IA - VERSION BRUTALE QUI MARCHE À 100%');
-  console.log('═'.repeat(70));
-  console.log(`🚀 Serveur démarré : http://localhost:${PORT}`);
-  console.log(`📊 Total d'articles : ${Object.values(REAL_ARTICLES_DATABASE).flat().length}`);
-  console.log(`🌍 Sites disponibles : ${Object.keys(REAL_ARTICLES_DATABASE).join(', ')}`);
-  console.log('\n📡 Endpoints actifs :');
-  console.log('   • GET  /');
-  console.log('   • GET  /api/news/:site');
-  console.log('   • GET  /api/news/all');
-  console.log('   • GET  /api/discover');
-  console.log('   • GET  /api/refresh');
-  console.log('═'.repeat(70) + '\n');
-  console.log('✅ STATUT : OPÉRATIONNEL - Aucune dépendance externe');
-  console.log('💡 Les articles sont générés dynamiquement avec timestamps aléatoires\n');
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`\n🦁 API RSS Samba IA - Port ${PORT}`);
+  console.log(`📡 ${Object.keys(RSS_FEEDS).length} flux RSS configurés\n`);
 });

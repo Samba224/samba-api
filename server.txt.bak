@@ -1,0 +1,6 @@
+git remote add origin https://github.com/Samba224/samba-api.git
+git branch -M main
+git push -u origin main
+
+
+curl https://samba-api-production.up.railway.app/api/discover

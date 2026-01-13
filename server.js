@@ -42,7 +42,9 @@ async function fetchRSS(url, siteName) {
       image: extractImage(item),
       source: siteName,
       category: categorize(item.title || ''),
-      timestamp: item.pubDate || item.published || new Date().toISOString()
+      timestamp: item.pubDate || item.published || new Date().toISOString(),
+      // Ajouter le contenu complet si disponible
+      content: (item['content:encoded'] || item.description || item.summary || '').replace(/<[^>]*>/g, '').substring(0, 1000)
     }));
 
     console.log(`✅ ${articles.length} articles RSS de ${siteName}`);

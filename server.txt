@@ -1,0 +1,20 @@
+git remote add origin https://github.com/Samba224/samba-api.git
+git branch -M main
+git push -u origin main
+
+
+curl https://samba-api-production.up.railway.app/api/discover
+
+# Initialiser le repo s'il ne l'est pas déjà
+git init
+
+# Ajouter les fichiers
+git add .
+
+# Créer le premier commit
+git commit -m "Mise à jour Scraper RSS et endpoints News"
+
+# Connecter et pousser vers ton repo
+git remote add origin https://github.com/Samba224/samba-api.git
+git branch -M main
+git push -u origin main
